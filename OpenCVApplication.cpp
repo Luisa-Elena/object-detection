@@ -16,6 +16,13 @@ Mat expandRegions(const Mat& markers, const Mat& cleanedBinary, const Mat& distT
     int di[] = { 0, -1, -1, -1, 0, 1, 1, 1 };
     int dj[] = { -1, -1, 0, 1, 1, 1, 0, -1 };
 
+    // compute gradient
+    Mat gradX, gradY, gradient;
+    Sobel(gray, gradX, CV_32F, 1, 0, 3);
+    Sobel(gray, gradY, CV_32F, 0, 1, 3);
+    magnitude(gradX, gradY, gradient);
+    normalize(gradient, gradient, 0, 1, NORM_MINMAX);
+
     std::priority_queue<std::tuple<float, int, int, int, int>> pq;
 
     for (int i = 0; i < rows; i++) {
@@ -26,7 +33,8 @@ Mat expandRegions(const Mat& markers, const Mat& cleanedBinary, const Mat& distT
                     int nj = j + dj[k];
 
                     if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && expandedMarkers.at<int>(ni, nj) == -1 && !visited.at<uchar>(ni, nj)) {
-                        pq.push(std::make_tuple(distTransform.at<float>(ni, nj), ni, nj, i, j));
+                        float priority = distTransform.at<float>(ni, nj) - 0.5f * gradient.at<float>(ni, nj);
+                        pq.push(std::make_tuple(priority, ni, nj, i, j));
                         visited.at<uchar>(ni, nj) = 1;
                     }
                 }
@@ -57,7 +65,8 @@ Mat expandRegions(const Mat& markers, const Mat& cleanedBinary, const Mat& distT
             int nj = y + dj[k];
 
             if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && expandedMarkers.at<int>(ni, nj) == -1 && !visited.at<uchar>(ni, nj) && cleanedBinary.at<uchar>(ni, nj) == 255) {
-                pq.push(std::make_tuple(distTransform.at<float>(ni, nj), ni, nj, x, y));
+                float new_priority = distTransform.at<float>(ni, nj) - 0.5f * gradient.at<float>(ni, nj);
+                pq.push(std::make_tuple(new_priority, ni, nj, x, y));
                 visited.at<uchar>(ni, nj) = 1;
             }
         }
@@ -66,7 +75,7 @@ Mat expandRegions(const Mat& markers, const Mat& cleanedBinary, const Mat& distT
     return expandedMarkers;
 }
 
-Mat generateColorImage(const Mat& labels, int numLabels) {
+Mat generateColorImage(const Mat& labels, int numLabels)  {
     Mat colorLabels = Mat::zeros(labels.size(), CV_8UC3);
     std::vector<Vec3b> colors(numLabels + 1, Vec3b(0, 0, 0));
 
@@ -124,7 +133,7 @@ Mat labelConnectedComponents(Mat img) {
         }
     }
 
-    //imshow("labels", generateColorImage(labels, label));
+    imshow("labels", generateColorImage(labels, label));
 
     return labels;
 }
@@ -212,6 +221,7 @@ Mat autoThreshold(Mat src) {
         }
     }
 
+    std::cout << "Treshold: " << T << '\n';
     return dst;
 }
 
@@ -317,20 +327,34 @@ void watershed() {
                 gray.at<uchar>(i, j) = (src.at<Vec3b>(i, j)[2] + src.at<Vec3b>(i, j)[1] + src.at<Vec3b>(i, j)[0]) / 3;
             }
         }
-        //imshow("grayscale", gray);
+        imshow("grayscale", gray);
 
         // Convert to binary image (thresholding)
+        /*Mat binary1(rows, cols, CV_8UC1);
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++){
+                if (gray.at<uchar>(i, j) < 250)
+                    binary1.at<uchar>(i, j) = 255;
+                else
+                    binary1.at<uchar>(i, j) = 0;
+            }
+        }*/
         Mat binary = autoThreshold(gray);
-        //imshow("binary", binary);
+        imshow("binary", binary);
+        //imshow("111", binary1);
 
         // Noise removal
         //Mat kernel = getStructuringElement(MORPH_RECT, Size(3, 3));
         //Mat cleanedBinary;
         //morphologyEx(binary, cleanedBinary, MORPH_OPEN, kernel, Point(-1, -1), 2);  // 2 iterations for noise removal
         Mat cleanedBinary = opening(binary);
-        //imshow("cleaned binary", cleanedBinary);
+        imshow("cleaned binary", cleanedBinary);
 
         // Sure background - dilate
+        //Mat sure_background;
+        //Mat M = Mat::ones(5, 5, CV_8U);
+        //Point anchor(-1, -1);
+        //dilate(cleanedBinary, sure_background, M, anchor, 1, BORDER_CONSTANT, morphologyDefaultBorderValue());
         Mat sure_background = dilation(cleanedBinary, 4);
         imshow("sure background", sure_background);
 
@@ -339,14 +363,14 @@ void watershed() {
         cv::distanceTransform(cleanedBinary, distTransform, cv::DIST_L2, 3);
         cv::Mat distNorm;
         cv::normalize(distTransform, distNorm, 0, 1.0, cv::NORM_MINMAX);
-        //cv::imshow("distance transform", distNorm);
+        cv::imshow("distance transform", distNorm);
 
         // Sure foreground - apply a treshold to the distance transform
         Mat sure_foreground;
         double maxVal;
         minMaxLoc(distTransform, nullptr, &maxVal);
-        threshold(distTransform, sure_foreground, 0.8 * maxVal, 255, THRESH_BINARY);
-        //imshow("sure foreground", sure_foreground);
+        threshold(distTransform, sure_foreground, 0.75 * maxVal, 255, THRESH_BINARY);
+        imshow("sure foreground", sure_foreground);
 
         // Unknown
         sure_background.convertTo(sure_background, CV_8UC1);
@@ -354,7 +378,7 @@ void watershed() {
         cleanedBinary.convertTo(cleanedBinary, CV_8UC1);
         Mat unknown;
         subtract(cleanedBinary, sure_foreground, unknown);
-        //imshow("unknown", unknown);
+        imshow("unknown", unknown);
 
         // Marker labelling
         Mat markers = labelConnectedComponents(sure_foreground);
@@ -369,11 +393,11 @@ void watershed() {
                 }
             }
         }
-        //imshow("markers", generateColorImage(markers, maxLabel+1));
+        imshow("markers", generateColorImage(markers, maxLabel+1));
 
         // Find borders and perform segmentation
         Mat expandedMarkers = expandRegions(markers, cleanedBinary, distTransform, gray);
-        //imshow("expanded regions", generateColorImage(expandedMarkers, maxLabel + 1));
+        imshow("expanded regions", generateColorImage(expandedMarkers, maxLabel + 1));
 
         // Draw contours on the original image
         drawContours(&src, expandedMarkers);
