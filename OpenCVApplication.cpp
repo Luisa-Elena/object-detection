@@ -52,10 +52,10 @@ Mat expandRegions(const Mat& markers, const Mat& cleanedBinary, const Mat& distT
         int x1 = std::get<3>(top);
         int y1 = std::get<4>(top);
 
-        if (expandedMarkers.at<int>(x, y) == -1 && cleanedBinary.at<uchar>(x, y) == 255) {
+        if (expandedMarkers.at<int>(x, y) == -1 /*&& cleanedBinary.at<uchar>(x, y) == 255*/) {
             int label = expandedMarkers.at<int>(x1, y1);
 
-            if (abs(gray.at<uchar>(x, y) - gray.at<uchar>(x1, y1)) < 75) {
+            if (abs(gray.at<uchar>(x, y) - gray.at<uchar>(x1, y1)) < 95) {
                 expandedMarkers.at<int>(x, y) = label;
             }
         }
@@ -64,7 +64,7 @@ Mat expandRegions(const Mat& markers, const Mat& cleanedBinary, const Mat& distT
             int ni = x + di[k];
             int nj = y + dj[k];
 
-            if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && expandedMarkers.at<int>(ni, nj) == -1 && !visited.at<uchar>(ni, nj) && cleanedBinary.at<uchar>(ni, nj) == 255) {
+            if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && expandedMarkers.at<int>(ni, nj) == -1 && !visited.at<uchar>(ni, nj) /*&& cleanedBinary.at<uchar>(ni, nj) == 255*/) {
                 float new_priority = distTransform.at<float>(ni, nj) - 0.5f * gradient.at<float>(ni, nj);
                 pq.push(std::make_tuple(new_priority, ni, nj, x, y));
                 visited.at<uchar>(ni, nj) = 1;
@@ -307,6 +307,22 @@ Mat opening(Mat binary) {
     return dst;
 }
 
+Mat subtract1(Mat binary, Mat foreground) {
+    Mat result(binary.rows, binary.cols, CV_8UC1);
+
+    for (int i = 0; i < binary.rows; i++) {
+        for (int j = 0; j < binary.cols; j++) {
+            if ((binary.at<uchar>(i, j) == 255 && foreground.at<uchar>(i, j) == 255) || (binary.at<uchar>(i, j) == 0 && foreground.at<uchar>(i, j) == 0)) {
+                result.at<uchar>(i, j) = 0;
+            }
+            else {
+                result.at<uchar>(i, j) = 255;
+            }
+        }
+    }
+    return result;
+}
+
 void watershed() {
     char fname[MAX_PATH];
     while (openFileDlg(fname))
@@ -369,15 +385,17 @@ void watershed() {
         Mat sure_foreground;
         double maxVal;
         minMaxLoc(distTransform, nullptr, &maxVal);
-        threshold(distTransform, sure_foreground, 0.75 * maxVal, 255, THRESH_BINARY);
+        threshold(distTransform, sure_foreground, 0.65 * maxVal, 255, THRESH_BINARY);
         imshow("sure foreground", sure_foreground);
 
         // Unknown
-        sure_background.convertTo(sure_background, CV_8UC1);
+        //sure_background.convertTo(sure_background, CV_8UC1);
+        //sure_foreground.convertTo(sure_foreground, CV_8UC1);
+        //cleanedBinary.convertTo(cleanedBinary, CV_8UC1);
+        //Mat unknown;
+        //subtract(cleanedBinary, sure_foreground, unknown);
         sure_foreground.convertTo(sure_foreground, CV_8UC1);
-        cleanedBinary.convertTo(cleanedBinary, CV_8UC1);
-        Mat unknown;
-        subtract(cleanedBinary, sure_foreground, unknown);
+        Mat unknown = subtract1(cleanedBinary, sure_foreground);
         imshow("unknown", unknown);
 
         // Marker labelling
