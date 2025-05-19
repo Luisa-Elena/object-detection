@@ -53,16 +53,16 @@ Mat expandRegions(const Mat& markers, const Mat& cleanedBinary, const Mat& distT
 
                 if (abs(gray.at<uchar>(x, y) - gray.at<uchar>(x1, y1)) < 95) {
                     expandedMarkers.at<int>(x, y) = label;
-                }
 
-                for (int k = 0; k < 8; k++) {
-                    int ni = x + di[k];
-                    int nj = y + dj[k];
+                    for (int k = 0; k < 8; k++) {
+                        int ni = x + di[k];
+                        int nj = y + dj[k];
 
-                    if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && expandedMarkers.at<int>(ni, nj) == -1 && !visited.at<uchar>(ni, nj)) {
-                        float new_priority = distTransform.at<float>(ni, nj);
-                        pq.push(std::make_tuple(new_priority, ni, nj, x, y));
-                        visited.at<uchar>(ni, nj) = 1;
+                        if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && expandedMarkers.at<int>(ni, nj) == -1 && !visited.at<uchar>(ni, nj)) {
+                            float new_priority = distTransform.at<float>(ni, nj);
+                            pq.push(std::make_tuple(new_priority, ni, nj, x, y));
+                            visited.at<uchar>(ni, nj) = 1;
+                        }
                     }
                 }
             }
