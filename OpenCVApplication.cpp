@@ -16,7 +16,7 @@ Mat expandRegions(const Mat& markers, const Mat& cleanedBinary, const Mat& distT
     int di[] = { 0, -1, -1, -1, 0, 1, 1, 1 };
     int dj[] = { -1, -1, 0, 1, 1, 1, 0, -1 };
 
-    // Priority queue using only distance transform
+    // Priority queue using distance transform
     std::priority_queue<std::tuple<float, int, int, int, int>> pq;
 
     for (int i = 0; i < rows; i++) {
@@ -71,7 +71,6 @@ Mat expandRegions(const Mat& markers, const Mat& cleanedBinary, const Mat& distT
 
     return expandedMarkers;
 }
-
 
 Mat generateColorImage(const Mat& labels, int numLabels)  {
     Mat colorLabels = Mat::zeros(labels.size(), CV_8UC3);
@@ -362,7 +361,7 @@ void watershed() {
         cv::normalize(distTransform, distNorm, 0, 1.0, cv::NORM_MINMAX);
         cv::imshow("distance transform", distNorm);
 
-        // Sure foreground - apply a treshold to the distance transform
+        // Sure foreground - apply a threshold to the distance transform
         Mat sure_foreground;
         double maxVal;
         minMaxLoc(distTransform, nullptr, &maxVal);
